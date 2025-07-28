@@ -1,6 +1,6 @@
 # Metro Card Bot
 
-一个用于管理信用卡地铁使用次数的 Telegram Bot。帮助您追踪每张卡每月的地铁乘坐次数（最多10次）。
+一个用于管理信用卡地铁使用次数的 Telegram Bot，使用 TypeScript + ts-node 开发。帮助您追踪每张卡每月的地铁乘坐次数（最多10次）。
 
 ## 功能特性
 
@@ -11,6 +11,15 @@
 - ✅ 每月自动重置使用次数
 - ✅ 删除不需要的卡片
 - ✅ 防止超出月度使用限制
+- ✅ TypeScript 类型安全
+- ✅ 开发时热重载
+
+## 技术栈
+
+- **TypeScript** - 类型安全的 JavaScript
+- **ts-node** - 直接运行 TypeScript
+- **Telegraf** - Telegram Bot 框架
+- **dotenv** - 环境变量管理
 
 ## 安装和设置
 
@@ -29,6 +38,12 @@ npm install
 
 ### 3. 配置环境变量
 
+复制示例配置文件并编辑：
+
+```bash
+cp .env.example .env
+```
+
 编辑 `.env` 文件，添加您的 Bot Token：
 
 ```
@@ -39,11 +54,24 @@ DATA_FILE=./data/cards.json
 ### 4. 运行 Bot
 
 ```bash
-# 生产环境
+# 使用 ts-node 直接运行 TypeScript（推荐）
 npm start
 
 # 开发环境（自动重启）
 npm run dev
+
+# 编译为 JavaScript
+npm run build
+
+# 运行编译后的 JavaScript 版本
+npm run prod
+```
+
+### 5. 验证配置
+
+```bash
+# 运行配置检查脚本
+npx ts-node src/test-config.ts
 ```
 
 ## 使用方法
@@ -58,8 +86,10 @@ npm run dev
 
 ### 按钮说明
 
-- **⚪ 卡片名称 (次数/10) 空闲**：卡片处于空闲状态，可以进站
-- **🟢 卡片名称 (次数/10) 进站中**：卡片处于进站状态，下次点击将出站
+- **😴 卡片名称 (次数/10) 空闲**：卡片处于空闲状态，可以进站
+- **🚇 卡片名称 (次数/10) 进站中**：卡片处于进站状态，下次点击将出站
+
+
 - **🟢 次数 0-4**：使用次数较少（绿色）
 - **🟠 次数 5-7**：使用次数中等（橙色）
 - **🟡 次数 8-9**：使用次数较多（黄色）

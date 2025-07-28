@@ -1,15 +1,19 @@
-require('dotenv').config();
-const { Telegraf, Markup } = require('telegraf');
-const DataManager = require('./dataManager');
+import 'dotenv/config';
+import { Telegraf, Markup, Context } from 'telegraf';
+import { DataManager } from './dataManager';
+import { Card, BotContext } from './types';
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const bot = new Telegraf(process.env.BOT_TOKEN!);
 const dataManager = new DataManager(process.env.DATA_FILE);
 
 // 常量
 const MAX_MONTHLY_USAGE = 10;
 
+// 用户状态管理
+const userStates = new Map<number, string>();
+
 // 获取状态表情符号
-function getStatusEmoji(status) {
+function getStatusEmoji(status: Card['status']): string {
     switch (status) {
         case 'idle': return '😴';
         case 'in_station': return '🚇';
@@ -18,7 +22,7 @@ function getStatusEmoji(status) {
 }
 
 // 获取使用次数的颜色表情
-function getUsageEmoji(usage) {
+function getUsageEmoji(usage: number): string {
     if (usage >= MAX_MONTHLY_USAGE) return '🔴';
     if (usage >= 8) return '🟡';
     if (usage >= 5) return '🟠';
@@ -26,7 +30,7 @@ function getUsageEmoji(usage) {
 }
 
 // 创建卡片按钮
-function createCardButtons(cards) {
+function createCardButtons(cards: Card[]) {
     if (cards.length === 0) {
         return Markup.inlineKeyboard([
             [Markup.button.callback('➕ 添加卡片', 'add_card')]
@@ -54,7 +58,7 @@ function createCardButtons(cards) {
 }
 
 // 创建删除卡片按钮
-function createDeleteButtons(cards) {
+function createDeleteButtons(cards: Card[]) {
     if (cards.length === 0) {
         return Markup.inlineKeyboard([
             [Markup.button.callback('⬅️ 返回', 'back_to_main')]
@@ -70,7 +74,9 @@ function createDeleteButtons(cards) {
 }
 
 // 显示主菜单
-async function showMainMenu(ctx) {
+async function showMainMenu(ctx: Context): Promise<void> {
+    if (!ctx.from) return;
+
     const userId = ctx.from.id;
     const cards = dataManager.getCards(userId);
 
@@ -97,9 +103,6 @@ async function showMainMenu(ctx) {
         await ctx.reply(message, keyboard);
     }
 }
-
-// 用户状态管理
-const userStates = new Map();
 
 // 启动命令
 bot.start((ctx) => {
@@ -141,6 +144,7 @@ bot.command('cards', (ctx) => {
 
 // 处理添加卡片
 bot.action('add_card', (ctx) => {
+    if (!ctx.from) return;
     userStates.set(ctx.from.id, 'waiting_card_name');
     ctx.reply('请输入卡片名称（例如：工商银行卡、招商银行卡等）：');
     ctx.answerCbQuery();
@@ -148,6 +152,7 @@ bot.action('add_card', (ctx) => {
 
 // 处理批量添加卡片
 bot.action('batch_add_card', (ctx) => {
+    if (!ctx.from) return;
     userStates.set(ctx.from.id, 'waiting_batch_card_names');
     ctx.reply('请输入多张卡片名称，用逗号分隔\n\n例如：工商银行卡,招商银行卡,建设银行卡\n\n💡 提示：每张卡片名称不超过20个字符');
     ctx.answerCbQuery();
@@ -155,6 +160,8 @@ bot.action('batch_add_card', (ctx) => {
 
 // 处理卡片点击
 bot.action(/^card_(.+)$/, async (ctx) => {
+    if (!ctx.from || !ctx.match) return;
+
     const cardId = ctx.match[1];
     const userId = ctx.from.id;
     const cards = dataManager.getCards(userId);
@@ -170,8 +177,8 @@ bot.action(/^card_(.+)$/, async (ctx) => {
         return;
     }
 
-    let newStatus;
-    let message;
+    let newStatus: Card['status'];
+    let message: string;
 
     if (card.status === 'idle') {
         newStatus = 'in_station';
@@ -179,6 +186,8 @@ bot.action(/^card_(.+)$/, async (ctx) => {
     } else if (card.status === 'in_station') {
         newStatus = 'idle';
         message = `✅ ${card.name} 已出站，本月使用次数：${card.monthlyUsage + 1}/${MAX_MONTHLY_USAGE}`;
+    } else {
+        return;
     }
 
     dataManager.updateCardStatus(userId, cardId, newStatus);
@@ -188,6 +197,8 @@ bot.action(/^card_(.+)$/, async (ctx) => {
 
 // 处理删除菜单
 bot.action('delete_menu', async (ctx) => {
+    if (!ctx.from) return;
+
     const userId = ctx.from.id;
     const cards = dataManager.getCards(userId);
 
@@ -202,6 +213,8 @@ bot.action('delete_menu', async (ctx) => {
 
 // 处理删除卡片
 bot.action(/^delete_(.+)$/, async (ctx) => {
+    if (!ctx.from || !ctx.match) return;
+
     const cardId = ctx.match[1];
     const userId = ctx.from.id;
     const cards = dataManager.getCards(userId);
@@ -225,6 +238,8 @@ bot.action('back_to_main', async (ctx) => {
 
 // 处理文本消息（添加卡片名称）
 bot.on('text', async (ctx) => {
+    if (!ctx.from || !('text' in ctx.message)) return;
+
     const userId = ctx.from.id;
     const userState = userStates.get(userId);
 
@@ -271,9 +286,8 @@ bot.on('text', async (ctx) => {
             return;
         }
 
-        const results = [];
-        const successCards = [];
-        const failedCards = [];
+        const successCards: string[] = [];
+        const failedCards: string[] = [];
 
         for (const cardName of cardNames) {
             if (cardName.length === 0) {

@@ -2,10 +2,12 @@
     "name": "metro-card-bot",
     "version": "1.0.0",
     "description": "Telegram bot for managing metro card usage",
-    "main": "index.js",
+    "main": "dist/index.js",
     "scripts": {
-        "start": "node index.js",
-        "dev": "nodemon index.js"
+        "start": "ts-node src/index.ts",
+        "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+        "build": "tsc",
+        "prod": "npm run build && node dist/index.js"
     },
     "keywords": [
         "telegram",
@@ -21,6 +23,10 @@
         "dotenv": "^16.0.3"
     },
     "devDependencies": {
-        "nodemon": "^2.0.22"
+        "@types/node": "^20.0.0",
+        "nodemon": "^2.0.22",
+        "ts-node": "^10.9.0",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "^5.0.0"
     }
 }
