@@ -37,7 +37,7 @@ function createCardButtons(cards) {
         const statusEmoji = getStatusEmoji(card.status);
         const usageEmoji = getUsageEmoji(card.monthlyUsage);
         const statusText = card.status === 'in_station' ? '进站中' : '空闲';
-        const buttonText = `${statusEmoji} ${card.name} (${card.monthlyUsage}/${MAX_MONTHLY_USAGE}) ${statusText}`;
+        const buttonText = `${statusEmoji} ${card.name} (${card.monthlyUsage}/${MAX_MONTHLY_USAGE}) ${usageEmoji} - ${statusText}`;
 
         return [Markup.button.callback(buttonText, `card_${card.id}`)];
     });
@@ -84,7 +84,7 @@ async function showMainMenu(ctx) {
             const statusEmoji = getStatusEmoji(card.status);
             const usageEmoji = getUsageEmoji(card.monthlyUsage);
             const statusText = card.status === 'in_station' ? '进站中' : '空闲';
-            message += `${statusEmoji} ${card.name}: ${card.monthlyUsage}/${MAX_MONTHLY_USAGE} 次 - ${statusText}\n`;
+            message += `${statusEmoji} ${card.name}: ${card.monthlyUsage}/${MAX_MONTHLY_USAGE} 次 ${usageEmoji} - ${statusText}\n`;
         });
         message += '\n点击卡片按钮来进站/出站：';
     }
