@@ -1,0 +1,26 @@
+{
+    "name": "metro-card-bot",
+    "version": "1.0.0",
+    "description": "Telegram bot for managing metro card usage",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "nodemon index.js"
+    },
+    "keywords": [
+        "telegram",
+        "bot",
+        "metro",
+        "card",
+        "management"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "telegraf": "^4.12.2",
+        "dotenv": "^16.0.3"
+    },
+    "devDependencies": {
+        "nodemon": "^2.0.22"
+    }
+}
