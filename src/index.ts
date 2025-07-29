@@ -24,8 +24,8 @@ function getStatusEmoji(status: Card['status']): string {
 // 获取使用次数的颜色表情
 function getUsageEmoji(usage: number): string {
     if (usage >= MAX_MONTHLY_USAGE) return '🔴';
-    if (usage >= 8) return '🟡';
-    if (usage >= 5) return '🟠';
+    if (usage >= 8) return '🟠';
+    if (usage >= 5) return '🟡';
     return '🟢';
 }
 
