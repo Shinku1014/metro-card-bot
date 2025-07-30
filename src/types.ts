@@ -2,7 +2,7 @@ export interface Card {
     id: string;
     name: string;
     monthlyUsage: number;
-    status: 'idle' | 'in_station';
+    status: 'idle' | 'in_station' | 'used_today';
     lastUsed: string | null;
     createdAt: string;
 }

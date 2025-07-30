@@ -15,9 +15,10 @@ const userStates = new Map<number, string>();
 // 获取状态表情符号
 function getStatusEmoji(status: Card['status']): string {
     switch (status) {
-        case 'idle': return '😴';
+        case 'idle': return '😃';
         case 'in_station': return '🚇';
-        default: return '😴';
+        case 'used_today': return '😴';
+        default: return '😃';
     }
 }
 
@@ -40,7 +41,19 @@ function createCardButtons(cards: Card[]) {
     const buttons = cards.map(card => {
         const statusEmoji = getStatusEmoji(card.status);
         const usageEmoji = getUsageEmoji(card.monthlyUsage);
-        const statusText = card.status === 'in_station' ? '进站中' : '空闲';
+        let statusText: string;
+
+        switch (card.status) {
+            case 'in_station':
+                statusText = '进站中';
+                break;
+            case 'used_today':
+                statusText = '今天用过了';
+                break;
+            default:
+                statusText = '空闲';
+        }
+
         const buttonText = `${statusEmoji} ${card.name} (${card.monthlyUsage}/${MAX_MONTHLY_USAGE}) ${usageEmoji} - ${statusText}`;
 
         return [Markup.button.callback(buttonText, `card_${card.id}`)];
@@ -89,7 +102,19 @@ async function showMainMenu(ctx: Context): Promise<void> {
         cards.forEach(card => {
             const statusEmoji = getStatusEmoji(card.status);
             const usageEmoji = getUsageEmoji(card.monthlyUsage);
-            const statusText = card.status === 'in_station' ? '进站中' : '空闲';
+            let statusText: string;
+
+            switch (card.status) {
+                case 'in_station':
+                    statusText = '进站中';
+                    break;
+                case 'used_today':
+                    statusText = '今天用过了';
+                    break;
+                default:
+                    statusText = '空闲';
+            }
+
             message += `${statusEmoji} ${card.name}: ${card.monthlyUsage}/${MAX_MONTHLY_USAGE} 次 ${usageEmoji} - ${statusText}\n`;
         });
         message += '\n点击卡片按钮来进站/出站：';
@@ -174,6 +199,11 @@ bot.action(/^card_(.+)$/, async (ctx) => {
 
     if (card.monthlyUsage >= MAX_MONTHLY_USAGE && card.status === 'idle') {
         await ctx.answerCbQuery('本月使用次数已达上限！');
+        return;
+    }
+
+    if (card.status === 'used_today') {
+        await ctx.answerCbQuery('今天已经使用过这张卡片了！');
         return;
     }
 

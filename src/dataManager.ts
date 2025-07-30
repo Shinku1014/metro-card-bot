@@ -81,6 +81,7 @@ export class DataManager {
     public getCards(userId: number): Card[] {
         const userData = this.getUserData(userId);
         this.resetMonthlyUsageIfNeeded(userId, userData);
+        this.resetDailyStatusIfNeeded(userId, userData);
         return userData.cards;
     }
 
@@ -95,14 +96,34 @@ export class DataManager {
         card.status = newStatus;
         card.lastUsed = new Date().toISOString();
 
-        // 如果从进站状态变为出站状态，增加使用次数
+        // 如果从进站状态变为出站状态，增加使用次数并设置为今天用过了
         if (oldStatus === 'in_station' && newStatus === 'idle') {
             card.monthlyUsage += 1;
+            card.status = 'used_today'; // 设置为今天用过了
+        } else {
+            card.status = newStatus;
         }
 
         data[userId.toString()] = userData;
         this.saveData(data);
         return true;
+    }
+
+    private resetDailyStatusIfNeeded(userId: number, userData: UserData): void {
+        const today = new Date().toDateString();
+
+        userData.cards.forEach(card => {
+            if (card.status === 'used_today' && card.lastUsed) {
+                const lastUsedDate = new Date(card.lastUsed).toDateString();
+                if (lastUsedDate !== today) {
+                    card.status = 'idle';
+                }
+            }
+        });
+
+        const data = this.loadData();
+        data[userId.toString()] = userData;
+        this.saveData(data);
     }
 
     private resetMonthlyUsageIfNeeded(userId: number, userData: UserData): void {
