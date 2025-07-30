@@ -4,7 +4,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# TypeScript
+# TypeScript 编译输出
+dist/
 *.tsbuildinfo
 
 # 环境变量文件
@@ -37,6 +38,8 @@ Thumbs.db
 # 文档文件
 README.md
 *.md
+DOCKER_DEPLOY.md
+TYPESCRIPT_MIGRATION.md
 
 # 测试文件
 test/
@@ -46,8 +49,16 @@ __tests__/
 # 开发工具配置
 .eslintrc*
 .prettierrc*
-tsconfig.json
 
 # 临时文件
 tmp/
 temp/
+
+# Docker 相关文件
+Dockerfile
+.dockerignore
+docker-compose.yml
+deploy.sh
+
+# GitHub Actions
+.github/
