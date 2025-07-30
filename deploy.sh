@@ -10,8 +10,24 @@ set -e
 TAG=${1:-latest}
 IMAGE_NAME="ghcr.io/shinku1014/metro-card-bot:${TAG}"
 
+# 检测系统架构
+ARCH=$(uname -m)
+case ${ARCH} in
+    x86_64)
+        PLATFORM="linux/amd64"
+        ;;
+    aarch64|arm64)
+        PLATFORM="linux/arm64"
+        ;;
+    *)
+        echo "⚠️  未知架构: ${ARCH}，使用默认平台"
+        PLATFORM="linux/amd64"
+        ;;
+esac
+
 echo "🚀 开始部署 Metro Card Bot..."
 echo "📦 镜像: ${IMAGE_NAME}"
+echo "🏗️  平台: ${PLATFORM} (检测到架构: ${ARCH})"
 
 # 检查 Docker 是否安装
 if ! command -v docker &> /dev/null; then
@@ -50,14 +66,18 @@ fi
 
 # 拉取最新镜像
 echo "⬇️  拉取镜像..."
-docker pull ${IMAGE_NAME}
+docker pull --platform ${PLATFORM} ${IMAGE_NAME}
 
 # 停止现有容器
 echo "🛑 停止现有容器..."
 docker-compose down || true
 
-# 更新镜像标签
+# 更新镜像标签和平台
 export IMAGE_TAG=${TAG}
+export DOCKER_PLATFORM=${PLATFORM}
+
+# 临时更新 docker-compose.yml 中的平台设置
+sed -i.bak "s|platform: linux/.*|platform: ${PLATFORM}|g" docker-compose.yml
 
 # 启动容器
 echo "🚀 启动容器..."
@@ -70,14 +90,25 @@ sleep 5
 # 检查容器状态
 if docker-compose ps | grep -q "Up"; then
     echo "✅ 部署成功！"
+    echo "🏗️  使用平台: ${PLATFORM}"
     echo "📊 容器状态:"
     docker-compose ps
     echo ""
     echo "📝 查看日志: docker-compose logs -f"
     echo "🛑 停止服务: docker-compose down"
     echo "🔄 重启服务: docker-compose restart"
+    
+    # 恢复原始 docker-compose.yml
+    if [ -f "docker-compose.yml.bak" ]; then
+        mv docker-compose.yml.bak docker-compose.yml.bak.used
+    fi
 else
     echo "❌ 部署失败，请检查日志:"
     docker-compose logs
+    
+    # 恢复原始 docker-compose.yml
+    if [ -f "docker-compose.yml.bak" ]; then
+        mv docker-compose.yml.bak docker-compose.yml
+    fi
     exit 1
 fi

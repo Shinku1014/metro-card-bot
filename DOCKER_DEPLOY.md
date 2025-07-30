@@ -25,6 +25,23 @@ echo "BOT_TOKEN=your_bot_token_here" > .env
 - Docker 20.10+
 - Docker Compose 2.0+
 - Linux 服务器（Ubuntu/CentOS/Debian 等）
+- 支持的架构：AMD64 (x86_64) 和 ARM64 (aarch64)
+
+## 🏗️ 架构支持
+
+项目支持多架构部署：
+- **AMD64** (x86_64): 适用于大多数云服务器和传统 PC
+- **ARM64** (aarch64): 适用于 Apple M1/M2、AWS Graviton、树莓派等
+
+### 检测和配置架构
+
+```bash
+# 运行架构检测脚本
+./detect-platform.sh
+
+# 手动检测架构
+uname -m
+```
 
 ## 🔧 环境变量
 

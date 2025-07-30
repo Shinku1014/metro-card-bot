@@ -3,6 +3,7 @@ version: '3.8'
 services:
   metro-card-bot:
     image: ghcr.io/shinku1014/metro-card-bot:${IMAGE_TAG:-latest}
+    platform: linux/arm64  # 根据您的服务器架构调整: linux/amd64 或 linux/arm64
     container_name: metro-card-bot
     restart: unless-stopped
     env_file:

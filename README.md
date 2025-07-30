@@ -89,6 +89,8 @@ npx ts-node src/test-config.ts
 
 ### 在服务器上部署
 
+> **💡 架构说明**: 项目支持 AMD64 (x86_64) 和 ARM64 (aarch64) 架构。部署前可运行 `./detect-platform.sh` 检测并自动配置合适的架构。
+
 #### 方法一：使用 Docker Compose（推荐）
 
 1. **在服务器上创建部署目录**：
@@ -124,8 +126,8 @@ echo "BOT_TOKEN=your_bot_token_here" > .env
 #### 方法二：直接使用 Docker
 
 ```bash
-# 拉取镜像
-docker pull ghcr.io/shinku1014/metro-card-bot:latest
+# 拉取镜像（指定平台架构）
+docker pull --platform linux/arm64 ghcr.io/shinku1014/metro-card-bot:latest
 
 # 创建数据目录
 mkdir -p ./data
@@ -134,10 +136,13 @@ mkdir -p ./data
 docker run -d \
   --name metro-card-bot \
   --restart unless-stopped \
+  --platform linux/arm64 \
   -e BOT_TOKEN=your_bot_token_here \
   -v $(pwd)/data:/app/data \
   ghcr.io/shinku1014/metro-card-bot:latest
 ```
+
+> **注意**: 如果您的服务器是 ARM64 架构（如 Apple M1/M2、AWS Graviton），请使用 `--platform linux/arm64`。如果是 AMD64 架构，请使用 `--platform linux/amd64`。
 
 ### Docker 管理命令
 
