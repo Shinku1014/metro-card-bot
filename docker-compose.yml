@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  metro-card-bot:
+    image: ghcr.io/shinku1014/metro-card-bot:${IMAGE_TAG:-latest}
+    container_name: metro-card-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATA_FILE=/app/data/cards.json
+      - NODE_ENV=production
+    volumes:
+      # 持久化数据目录
+      - ./data:/app/data
+      # 如果需要挂载配置文件
+      # - ./.env:/app/.env:ro
+    # 如果需要网络端口
+    # ports:
+    #   - "3000:3000"
+    
+    # 健康检查（可选）
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# 可选：如果需要网络配置
+# networks:
+#   default:
+#     name: metro-bot-network

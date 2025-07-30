@@ -77,6 +77,87 @@ nohup npm start > nohup.out 2>&1 &
 npx ts-node src/test-config.ts
 ```
 
+## Docker 部署
+
+### 使用 GitHub Actions 自动构建
+
+项目已配置 GitHub Actions 自动构建流水线，每次推送代码到 `master` 分支时会自动：
+
+1. 编译 TypeScript 代码
+2. 构建 Docker 镜像
+3. 推送到 GitHub Container Registry
+
+### 在服务器上部署
+
+#### 方法一：使用 Docker Compose（推荐）
+
+1. **在服务器上创建部署目录**：
+```bash
+mkdir metro-card-bot && cd metro-card-bot
+```
+
+2. **下载部署文件**：
+```bash
+# 下载 docker-compose.yml
+wget https://raw.githubusercontent.com/Shinku1014/metro-card-bot/master/docker-compose.yml
+
+# 下载部署脚本
+wget https://raw.githubusercontent.com/Shinku1014/metro-card-bot/master/deploy.sh
+chmod +x deploy.sh
+```
+
+3. **配置环境变量**：
+```bash
+# 创建 .env 文件
+echo "BOT_TOKEN=your_bot_token_here" > .env
+```
+
+4. **运行部署脚本**：
+```bash
+# 部署最新版本
+./deploy.sh
+
+# 部署指定版本
+./deploy.sh v1.0.0
+```
+
+#### 方法二：直接使用 Docker
+
+```bash
+# 拉取镜像
+docker pull ghcr.io/shinku1014/metro-card-bot:latest
+
+# 创建数据目录
+mkdir -p ./data
+
+# 运行容器
+docker run -d \
+  --name metro-card-bot \
+  --restart unless-stopped \
+  -e BOT_TOKEN=your_bot_token_here \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/shinku1014/metro-card-bot:latest
+```
+
+### Docker 管理命令
+
+```bash
+# 查看容器状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+
+# 重启服务
+docker-compose restart
+
+# 停止服务
+docker-compose down
+
+# 更新到最新版本
+docker-compose pull && docker-compose up -d
+```
+
 ## 使用方法
 
 ### 基本操作
@@ -108,13 +189,25 @@ npx ts-node src/test-config.ts
 
 ```
 metro-card-bot/
-├── index.js          # 主程序文件
-├── dataManager.js    # 数据管理模块
-├── package.json      # 项目配置
-├── .env              # 环境变量配置
-├── .gitignore        # Git 忽略文件
-└── data/             # 数据存储目录
-    └── cards.json    # 用户数据文件
+├── src/                    # TypeScript 源代码
+│   ├── index.ts           # 主程序文件
+│   ├── dataManager.ts     # 数据管理模块
+│   ├── types.ts           # 类型定义
+│   └── test-config.ts     # 配置测试
+├── dist/                  # 编译后的 JavaScript 文件
+├── data/                  # 数据存储目录
+│   └── cards.json        # 用户数据文件
+├── .github/               # GitHub Actions 配置
+│   └── workflows/
+│       └── docker-build.yml  # Docker 构建流水线
+├── Dockerfile             # Docker 镜像构建文件
+├── docker-compose.yml     # Docker Compose 配置
+├── deploy.sh              # 部署脚本
+├── .dockerignore          # Docker 忽略文件
+├── package.json           # 项目配置
+├── tsconfig.json          # TypeScript 配置
+├── .env.example           # 环境变量示例
+└── README.md              # 项目文档
 ```
 
 ## 数据结构
