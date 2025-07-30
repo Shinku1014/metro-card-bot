@@ -69,7 +69,7 @@ export class DataManager {
             monthlyUsage: 0,
             status: 'idle',
             lastUsed: null,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toLocaleString()
         };
 
         userData.cards.push(newCard);
@@ -94,7 +94,7 @@ export class DataManager {
 
         const oldStatus = card.status;
         card.status = newStatus;
-        card.lastUsed = new Date().toISOString();
+        card.lastUsed = new Date().toLocaleString();
 
         // 如果从进站状态变为出站状态，增加使用次数并设置为今天用过了
         if (oldStatus === 'in_station' && newStatus === 'idle') {
@@ -114,6 +114,7 @@ export class DataManager {
 
         userData.cards.forEach(card => {
             if (card.status === 'used_today' && card.lastUsed) {
+                // 将本地时间字符串转换为 Date 对象，然后获取日期字符串进行比较
                 const lastUsedDate = new Date(card.lastUsed).toDateString();
                 if (lastUsedDate !== today) {
                     card.status = 'idle';

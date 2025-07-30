@@ -65,6 +65,9 @@ npm run build
 
 # 运行编译后的 JavaScript 版本
 npm run prod
+
+# 后台运行（使用 nohup）
+nohup npm start > nohup.out 2>&1 &
 ```
 
 ### 5. 验证配置
