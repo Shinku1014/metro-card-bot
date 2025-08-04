@@ -70,7 +70,7 @@ docker pull --platform ${PLATFORM} ${IMAGE_NAME}
 
 # 停止现有容器
 echo "🛑 停止现有容器..."
-docker-compose down || true
+docker compose down || true
 
 # 更新镜像标签和平台
 export IMAGE_TAG=${TAG}
@@ -81,22 +81,22 @@ sed -i.bak "s|platform: linux/.*|platform: ${PLATFORM}|g" docker-compose.yml
 
 # 启动容器
 echo "🚀 启动容器..."
-docker-compose up -d
+docker compose up -d
 
 # 等待容器启动
 echo "⏳ 等待容器启动..."
 sleep 5
 
 # 检查容器状态
-if docker-compose ps | grep -q "Up"; then
+if docker compose ps | grep -q "Up"; then
     echo "✅ 部署成功！"
     echo "🏗️  使用平台: ${PLATFORM}"
     echo "📊 容器状态:"
-    docker-compose ps
+    docker compose ps
     echo ""
-    echo "📝 查看日志: docker-compose logs -f"
-    echo "🛑 停止服务: docker-compose down"
-    echo "🔄 重启服务: docker-compose restart"
+    echo "📝 查看日志: docker compose logs -f"
+    echo "🛑 停止服务: docker compose down"
+    echo "🔄 重启服务: docker compose restart"
     
     # 恢复原始 docker-compose.yml
     if [ -f "docker-compose.yml.bak" ]; then
@@ -104,7 +104,7 @@ if docker-compose ps | grep -q "Up"; then
     fi
 else
     echo "❌ 部署失败，请检查日志:"
-    docker-compose logs
+    docker compose logs
     
     # 恢复原始 docker-compose.yml
     if [ -f "docker-compose.yml.bak" ]; then
