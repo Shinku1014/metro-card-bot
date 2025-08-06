@@ -3,7 +3,7 @@ version: '3.8'
 services:
   metro-card-bot:
     image: ghcr.io/shinku1014/metro-card-bot:${IMAGE_TAG:-latest}
-    platform: linux/arm64  # 根据您的服务器架构调整: linux/amd64 或 linux/arm64
+    platform: linux/arm64 # 根据您的服务器架构调整: linux/amd64 或 linux/arm64
     container_name: metro-card-bot
     restart: unless-stopped
     env_file:
@@ -16,13 +16,13 @@ services:
       - ./data:/app/data
       # 如果需要挂载配置文件
       # - ./.env:/app/.env:ro
-    # 如果需要网络端口
-    # ports:
-    #   - "3000:3000"
-    
-    # 健康检查（可选）
+      # 如果需要网络端口
+      # ports:
+      #   - "3000:3000"
+
+      # 健康检查（可选）
     healthcheck:
-      test: ["CMD", "node", "-e", "process.exit(0)"]
+      test: [ "CMD", "node", "-e", "process.exit(0)" ]
       interval: 30s
       timeout: 10s
       retries: 3
