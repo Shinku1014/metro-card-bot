@@ -45,6 +45,59 @@ fi
 echo "📁 创建数据目录..."
 mkdir -p ./data
 
+# 确保数据文件存在并具备读写权限
+if [ ! -f "./data/cards.json" ]; then
+        echo "[]" > ./data/cards.json
+        echo "🆕 已创建 ./data/cards.json"
+fi
+# 为避免容器内权限问题，这里赋予读写权限（不授予执行权限）
+chmod 666 ./data/cards.json || true
+
+# 如果缺少 docker-compose.yml，则按当前模板创建
+if [ ! -f "docker-compose.yml" ]; then
+        echo "🧩 未检测到 docker-compose.yml，正在创建..."
+        cat > docker-compose.yml <<'YAML'
+version: '3.8'
+
+services:
+    metro-card-bot:
+        image: ghcr.io/shinku1014/metro-card-bot:${IMAGE_TAG:-latest}
+        platform: linux/arm64
+        container_name: metro-card-bot
+        restart: unless-stopped
+        env_file:
+            - .env
+        environment:
+            - DATA_FILE=/app/data/cards.json
+            - NODE_ENV=production
+            - TZ=Asia/Shanghai
+            - LANG=zh_CN.UTF-8
+            - LC_TIME=zh_CN.UTF-8
+        volumes:
+            # 持久化数据目录
+            - ./data:/app/data
+            # 如果需要挂载配置文件
+            # - ./.env:/app/.env:ro
+            # 如果需要网络端口
+            # ports:
+            #   - "3000:3000"
+
+            # 健康检查（可选）
+        healthcheck:
+            test: [ "CMD", "node", "-e", "process.exit(0)" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+
+# 可选：如果需要网络配置
+# networks:
+#   default:
+#     name: metro-bot-network
+YAML
+        echo "✅ 已创建 docker-compose.yml"
+fi
+
 # 检查环境变量文件
 if [ ! -f ".env" ]; then
     echo "⚠️  未找到 .env 文件"
