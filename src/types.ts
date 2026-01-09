@@ -1,7 +1,15 @@
+export interface CouponBatch {
+    monthKey: string;
+    count: number;
+}
+
 export interface Card {
     id: string;
     name: string;
-    monthlyUsage: number;
+    coupons: {
+        A: number;
+        B: CouponBatch[];
+    };
     status: 'idle' | 'in_station' | 'used_today';
     lastUsed: string | null;
     createdAt: string;

@@ -63,10 +63,16 @@ export class DataManager {
             return false; // 卡片已存在
         }
 
+        const today = new Date();
+        const monthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+        
         const newCard: Card = {
             id: Date.now().toString(),
             name: cardName,
-            monthlyUsage: 0,
+            coupons: {
+                A: 10,
+                B: [{ monthKey, count: 5 }]
+            },
             status: 'idle',
             lastUsed: null,
             createdAt: new Date().toLocaleString()
@@ -80,7 +86,7 @@ export class DataManager {
 
     public getCards(userId: number): Card[] {
         const userData = this.getUserData(userId);
-        this.resetMonthlyUsageIfNeeded(userId, userData);
+        this.checkAndRefillCoupons(userId, userData);
         this.resetDailyStatusIfNeeded(userId, userData);
         return userData.cards;
     }
@@ -96,9 +102,8 @@ export class DataManager {
         card.status = newStatus;
         card.lastUsed = new Date().toLocaleString();
 
-        // 如果从进站状态变为出站状态，增加使用次数并设置为今天用过了
+        // 如果从进站状态变为出站状态，只改变状态，不增加使用次数（由 consumeCoupon 处理）
         if (oldStatus === 'in_station' && newStatus === 'idle') {
-            card.monthlyUsage += 1;
             card.status = 'used_today'; // 设置为今天用过了
         } else {
             card.status = newStatus;
@@ -127,24 +132,105 @@ export class DataManager {
         this.saveData(data);
     }
 
-    private resetMonthlyUsageIfNeeded(userId: number, userData: UserData): void {
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
+    private checkAndRefillCoupons(userId: number, userData: UserData): void {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const currentMonthKey = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}`;
+        
+        // Calculate previous month key
+        const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevMonthKey = `${prevDate.getFullYear()}-${(prevDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
+        let modified = false;
+
+        // Check if global month tracker needs update, or just run validation
         if (userData.currentMonth !== currentMonth || userData.currentYear !== currentYear) {
-            // 重置所有卡片的月度使用次数
-            userData.cards.forEach(card => {
-                card.monthlyUsage = 0;
-                card.status = 'idle';
-            });
-
             userData.currentMonth = currentMonth;
             userData.currentYear = currentYear;
+            modified = true;
+        }
 
+        userData.cards.forEach(card => {
+            // Ensure data structure integrity
+            if (!card.coupons) {
+                 // Convert old card if exists?
+                 // Or just init
+                 card.coupons = { A: 10, B: [] };
+            }
+            if (!card.coupons.B) card.coupons.B = [];
+
+            // Add current month coupons if missing
+            const hasCurrentMonth = card.coupons.B.some(b => b.monthKey === currentMonthKey);
+            if (!hasCurrentMonth) {
+                card.coupons.B.push({ monthKey: currentMonthKey, count: 5 });
+                modified = true;
+            }
+
+            // Remove expired coupons
+            const initialLen = card.coupons.B.length;
+            card.coupons.B = card.coupons.B.filter(b => 
+                b.monthKey === currentMonthKey || b.monthKey === prevMonthKey
+            );
+            
+            if (card.coupons.B.length !== initialLen) {
+                modified = true;
+            }
+        });
+
+        if (modified) {
             const data = this.loadData();
             data[userId.toString()] = userData;
             this.saveData(data);
         }
+    }
+
+    public consumeCoupon(userId: number, cardId: string, type: 'A' | 'B'): { success: boolean, message: string } {
+        const data = this.loadData();
+        const userData = this.getUserData(userId);
+        const card = userData.cards.find(c => c.id === cardId);
+
+        if (!card) return { success: false, message: '找不到卡片' };
+
+        if (!card.coupons) {
+            // Should not happen with new logic, but reset if happens
+             this.checkAndRefillCoupons(userId, userData); // Try to Init
+             if (!card.coupons) return { success: false, message: '数据错误' };
+        }
+
+        if (type === 'A') {
+            if (card.coupons.A > 0) {
+                card.coupons.A -= 1;
+                card.status = 'used_today'; // Set to used_today
+                card.lastUsed = new Date().toLocaleString();
+                
+                data[userId.toString()] = userData;
+                this.saveData(data);
+                return { success: true, message: `已使用优惠券 A。剩余 A: ${card.coupons.A}` };
+            } else {
+                return { success: false, message: '优惠券 A 已用完' };
+            }
+        } else if (type === 'B') {
+            // Use oldest valid batch first
+            card.coupons.B.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+            
+            const batch = card.coupons.B.find(b => b.count > 0);
+            
+            if (batch) {
+                batch.count -= 1;
+                card.status = 'used_today';
+                card.lastUsed = new Date().toLocaleString();
+                
+                const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
+                
+                data[userId.toString()] = userData;
+                this.saveData(data);
+                return { success: true, message: `已使用优惠券 B (${batch.monthKey})。剩余 B: ${totalB}` };
+            } else {
+                 return { success: false, message: '优惠券 B 已用完' };
+            }
+        }
+        return { success: false, message: '无效的优惠券类型' };
     }
 
     public deleteCard(userId: number, cardId: string): boolean {

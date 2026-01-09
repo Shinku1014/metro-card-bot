@@ -6,9 +6,6 @@ import { Card, BotContext } from './types';
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 const dataManager = new DataManager(process.env.DATA_FILE);
 
-// 常量
-const MAX_MONTHLY_USAGE = 10;
-
 // 用户状态管理
 const userStates = new Map<number, string>();
 
@@ -23,10 +20,11 @@ function getStatusEmoji(status: Card['status']): string {
 }
 
 // 获取使用次数的颜色表情
-function getUsageEmoji(usage: number): string {
-    if (usage >= MAX_MONTHLY_USAGE) return '🔴';
-    if (usage >= 8) return '🟠';
-    if (usage >= 5) return '🟡';
+function getCouponEmoji(card: Card): string {
+    const totalCoupons = card.coupons.A + card.coupons.B.reduce((sum, b) => sum + b.count, 0);
+    if (totalCoupons === 0) return '🔴';
+    if (totalCoupons <= 2) return '🟠';
+    if (totalCoupons <= 5) return '🟡';
     return '🟢';
 }
 
@@ -40,7 +38,7 @@ function createCardButtons(cards: Card[]) {
 
     const buttons = cards.map(card => {
         const statusEmoji = getStatusEmoji(card.status);
-        const usageEmoji = getUsageEmoji(card.monthlyUsage);
+        const usageEmoji = getCouponEmoji(card);
         let statusText: string;
 
         switch (card.status) {
@@ -54,7 +52,8 @@ function createCardButtons(cards: Card[]) {
                 statusText = '空闲';
         }
 
-        const buttonText = `${statusEmoji} ${card.name} (${card.monthlyUsage}/${MAX_MONTHLY_USAGE}) ${usageEmoji} - ${statusText}`;
+        const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
+        const buttonText = `${statusEmoji} ${card.name} (A:${card.coupons.A} B:${totalB}) ${usageEmoji} - ${statusText}`;
 
         return [Markup.button.callback(buttonText, `card_${card.id}`)];
     });
@@ -101,7 +100,7 @@ async function showMainMenu(ctx: Context): Promise<void> {
         message += '您的卡片列表：\n';
         cards.forEach(card => {
             const statusEmoji = getStatusEmoji(card.status);
-            const usageEmoji = getUsageEmoji(card.monthlyUsage);
+            const usageEmoji = getCouponEmoji(card);
             let statusText: string;
 
             switch (card.status) {
@@ -115,7 +114,8 @@ async function showMainMenu(ctx: Context): Promise<void> {
                     statusText = '空闲';
             }
 
-            message += `${statusEmoji} ${card.name}: ${card.monthlyUsage}/${MAX_MONTHLY_USAGE} 次 ${usageEmoji} - ${statusText}\n`;
+            const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
+            message += `${statusEmoji} ${card.name}: A:${card.coupons.A} B:${totalB} ${usageEmoji} - ${statusText}\n`;
         });
         message += '\n点击卡片按钮来进站/出站：';
     }
@@ -139,25 +139,30 @@ bot.help((ctx) => {
     const helpText = `
 🚇 地铁卡管理 Bot 帮助
 
-这个 Bot 可以帮助您管理信用卡的地铁使用次数（每月最多10次）。
+这个 Bot 可以帮助您管理信用卡的地铁优惠券。
+
+优惠规则：
+1. 每张卡初始有 10 张优惠券 A
+2. 每月自动增加 5 张优惠券 B（有效期2个月）
 
 功能：
 • /start - 显示主菜单
 • /cards - 查看所有卡片
 • 添加卡片 - 添加单张信用卡
 • 批量添加 - 一次添加多张卡片（用逗号分隔）
-• 点击卡片 - 进站/出站操作
+• 点击卡片 - 进站操作
+• 再次点击 - 出站并选择优惠券
 • 删除卡片 - 移除不需要的卡片
 
 使用方法：
 1. 添加您的信用卡（支持批量添加）
 2. 进地铁时点击相应卡片（显示"进站中"状态）
-3. 出地铁时再次点击同一卡片（完成一次乘坐，次数+1）
+3. 出地铁时再次点击同一卡片
+4. 在弹出的菜单中选择使用的优惠券（A或B）
+5. 系统自动扣除优惠券并标记为今日已用
 
 批量添加示例：
 工商银行卡,招商银行卡,建设银行卡
-
-每月会自动重置使用次数。
 `;
     ctx.reply(helpText);
 });
@@ -197,8 +202,11 @@ bot.action(/^card_(.+)$/, async (ctx) => {
         return;
     }
 
-    if (card.monthlyUsage >= MAX_MONTHLY_USAGE && card.status === 'idle') {
-        await ctx.answerCbQuery('本月使用次数已达上限！');
+    const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
+    const totalCoupons = card.coupons.A + totalB;
+
+    if (totalCoupons === 0 && card.status === 'idle') {
+        await ctx.answerCbQuery('优惠券已用完！');
         return;
     }
 
@@ -207,22 +215,47 @@ bot.action(/^card_(.+)$/, async (ctx) => {
         return;
     }
 
-    let newStatus: Card['status'];
-    let message: string;
-
     if (card.status === 'idle') {
-        newStatus = 'in_station';
-        message = `✅ ${card.name} 已进站`;
+        const newStatus = 'in_station';
+        const message = `✅ ${card.name} 已进站`;
+        dataManager.updateCardStatus(userId, cardId, newStatus);
+        await ctx.answerCbQuery(message);
+        await showMainMenu(ctx);
     } else if (card.status === 'in_station') {
-        newStatus = 'idle';
-        message = `✅ ${card.name} 已出站，本月使用次数：${card.monthlyUsage + 1}/${MAX_MONTHLY_USAGE}`;
-    } else {
-        return;
+        // 出站选择优惠券
+        await ctx.reply(`请选择 ${card.name} 使用的优惠券：`, Markup.inlineKeyboard([
+            [Markup.button.callback(`🎟️ 优惠券 A (剩余: ${card.coupons.A})`, `useA_${cardId}`)],
+            [Markup.button.callback(`🎫 优惠券 B (剩余: ${totalB})`, `useB_${cardId}`)],
+            [Markup.button.callback('❌ 取消', 'cancel_use')]
+        ]));
+        await ctx.answerCbQuery();
     }
+});
 
-    dataManager.updateCardStatus(userId, cardId, newStatus);
-    await ctx.answerCbQuery(message);
-    await showMainMenu(ctx);
+// 处理优惠券选择
+bot.action(/^use([AB])_(.+)$/, async (ctx) => {
+    if (!ctx.from || !ctx.match) return;
+
+    const type = ctx.match[1] as 'A' | 'B';
+    const cardId = ctx.match[2];
+    const userId = ctx.from.id;
+
+    const result = dataManager.consumeCoupon(userId, cardId, type);
+
+    if (result.success) {
+        await ctx.deleteMessage(); // 删除选择菜单
+        await ctx.reply(`✅ ${result.message}`);
+        await showMainMenu(ctx);
+    } else {
+        await ctx.answerCbQuery(result.message);
+    }
+});
+
+// 取消选择
+bot.action('cancel_use', async (ctx) => {
+    if (!ctx.from) return;
+    await ctx.deleteMessage();
+    await ctx.answerCbQuery('已取消');
 });
 
 // 处理删除菜单
