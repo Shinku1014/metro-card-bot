@@ -73,6 +73,11 @@ export class DataManager {
                 A: 10,
                 B: [{ monthKey, count: 5 }]
             },
+            dailyUsage: {
+                A: false,
+                B: false,
+                date: new Date().toDateString()
+            },
             status: 'idle',
             lastUsed: null,
             createdAt: new Date().toLocaleString()
@@ -102,9 +107,8 @@ export class DataManager {
         card.status = newStatus;
         card.lastUsed = new Date().toLocaleString();
 
-        // 如果从进站状态变为出站状态，只改变状态，不增加使用次数（由 consumeCoupon 处理）
         if (oldStatus === 'in_station' && newStatus === 'idle') {
-            card.status = 'used_today'; // 设置为今天用过了
+            card.status = 'idle'; // Reset to idle, usage tracked in dailyUsage
         } else {
             card.status = newStatus;
         }
@@ -116,20 +120,29 @@ export class DataManager {
 
     private resetDailyStatusIfNeeded(userId: number, userData: UserData): void {
         const today = new Date().toDateString();
+        let modified = false;
 
         userData.cards.forEach(card => {
-            if (card.status === 'used_today' && card.lastUsed) {
-                // 将本地时间字符串转换为 Date 对象，然后获取日期字符串进行比较
-                const lastUsedDate = new Date(card.lastUsed).toDateString();
-                if (lastUsedDate !== today) {
-                    card.status = 'idle';
-                }
+            if (!card.dailyUsage) {
+                card.dailyUsage = { A: false, B: false, date: today };
+                modified = true;
+            } else if (card.dailyUsage.date !== today) {
+                card.dailyUsage = { A: false, B: false, date: today };
+                modified = true;
+            }
+            
+            // Clean up legacy status
+            if (card.status === 'used_today') {
+                card.status = 'idle';
+                modified = true;
             }
         });
 
-        const data = this.loadData();
-        data[userId.toString()] = userData;
-        this.saveData(data);
+        if (modified) {
+            const data = this.loadData();
+            data[userId.toString()] = userData;
+            this.saveData(data);
+        }
     }
 
     private checkAndRefillCoupons(userId: number, userData: UserData): void {
@@ -159,6 +172,16 @@ export class DataManager {
                  card.coupons = { A: 10, B: [] };
             }
             if (!card.coupons.B) card.coupons.B = [];
+
+            // Ensure dailyUsage exists
+            if (!card.dailyUsage) {
+                card.dailyUsage = {
+                    A: false,
+                    B: false,
+                    date: new Date().toDateString()
+                };
+                modified = true;
+            }
 
             // Add current month coupons if missing
             const hasCurrentMonth = card.coupons.B.some(b => b.monthKey === currentMonthKey);
@@ -198,19 +221,33 @@ export class DataManager {
              if (!card.coupons) return { success: false, message: '数据错误' };
         }
 
+        // Check daily usage first
+        if (!card.dailyUsage) {
+             card.dailyUsage = { A: false, B: false, date: new Date().toDateString() };
+        } else if (card.dailyUsage.date !== new Date().toDateString()) {
+             card.dailyUsage = { A: false, B: false, date: new Date().toDateString() };
+        }
+
         if (type === 'A') {
+            if (card.dailyUsage.A) {
+                return { success: false, message: '今日已使用过五折优惠' };
+            }
             if (card.coupons.A > 0) {
                 card.coupons.A -= 1;
-                card.status = 'used_today'; // Set to used_today
+                card.dailyUsage.A = true;
+                card.status = 'idle'; // Back to idle
                 card.lastUsed = new Date().toLocaleString();
                 
                 data[userId.toString()] = userData;
                 this.saveData(data);
-                return { success: true, message: `已使用优惠券 A。剩余 A: ${card.coupons.A}` };
+                return { success: true, message: `已使用五折优惠。剩余: ${card.coupons.A}` };
             } else {
-                return { success: false, message: '优惠券 A 已用完' };
+                return { success: false, message: '五折优惠已用完' };
             }
         } else if (type === 'B') {
+            if (card.dailyUsage.B) {
+                return { success: false, message: '今日已使用过-2优惠' };
+            }
             // Use oldest valid batch first
             card.coupons.B.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
             
@@ -218,16 +255,17 @@ export class DataManager {
             
             if (batch) {
                 batch.count -= 1;
-                card.status = 'used_today';
+                card.dailyUsage.B = true;
+                card.status = 'idle';
                 card.lastUsed = new Date().toLocaleString();
                 
                 const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
                 
                 data[userId.toString()] = userData;
                 this.saveData(data);
-                return { success: true, message: `已使用优惠券 B (${batch.monthKey})。剩余 B: ${totalB}` };
+                return { success: true, message: `已使用-2优惠(${batch.monthKey})。剩余: ${totalB}` };
             } else {
-                 return { success: false, message: '优惠券 B 已用完' };
+                 return { success: false, message: '优惠-2已用完' };
             }
         }
         return { success: false, message: '无效的优惠券类型' };

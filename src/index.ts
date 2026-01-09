@@ -10,13 +10,10 @@ const dataManager = new DataManager(process.env.DATA_FILE);
 const userStates = new Map<number, string>();
 
 // 获取状态表情符号
-function getStatusEmoji(status: Card['status']): string {
-    switch (status) {
-        case 'idle': return '😃';
-        case 'in_station': return '🚇';
-        case 'used_today': return '😴';
-        default: return '😃';
-    }
+function getStatusEmoji(card: Card): string {
+    if (card.status === 'in_station') return '🚇';
+    if (card.dailyUsage && card.dailyUsage.A && card.dailyUsage.B) return '😴';
+    return '😃';
 }
 
 // 获取使用次数的颜色表情
@@ -37,23 +34,24 @@ function createCardButtons(cards: Card[]) {
     }
 
     const buttons = cards.map(card => {
-        const statusEmoji = getStatusEmoji(card.status);
+        const statusEmoji = getStatusEmoji(card);
         const usageEmoji = getCouponEmoji(card);
         let statusText: string;
 
-        switch (card.status) {
-            case 'in_station':
-                statusText = '进站中';
-                break;
-            case 'used_today':
-                statusText = '今天用过了';
-                break;
-            default:
-                statusText = '空闲';
+        if (card.status === 'in_station') {
+            statusText = '进站中';
+        } else if (card.dailyUsage && card.dailyUsage.A && card.dailyUsage.B) {
+            statusText = '今日已完';
+        } else if (card.dailyUsage && card.dailyUsage.A) {
+            statusText = '已用五折';
+        } else if (card.dailyUsage && card.dailyUsage.B) {
+            statusText = '已用-2';
+        } else {
+            statusText = '空闲';
         }
 
         const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
-        const buttonText = `${statusEmoji} ${card.name} (A:${card.coupons.A} B:${totalB}) ${usageEmoji} - ${statusText}`;
+        const buttonText = `${statusEmoji} ${card.name} (五折:${card.coupons.A} -2:${totalB}) ${usageEmoji} - ${statusText}`;
 
         return [Markup.button.callback(buttonText, `card_${card.id}`)];
     });
@@ -99,25 +97,26 @@ async function showMainMenu(ctx: Context): Promise<void> {
     } else {
         message += '您的卡片列表：\n';
         cards.forEach(card => {
-            const statusEmoji = getStatusEmoji(card.status);
+            const statusEmoji = getStatusEmoji(card);
             const usageEmoji = getCouponEmoji(card);
             let statusText: string;
 
-            switch (card.status) {
-                case 'in_station':
-                    statusText = '进站中';
-                    break;
-                case 'used_today':
-                    statusText = '今天用过了';
-                    break;
-                default:
-                    statusText = '空闲';
+            if (card.status === 'in_station') {
+                statusText = '进站中';
+            } else if (card.dailyUsage && card.dailyUsage.A && card.dailyUsage.B) {
+                statusText = '今日已完';
+            } else if (card.dailyUsage && card.dailyUsage.A) {
+                statusText = '已用五折';
+            } else if (card.dailyUsage && card.dailyUsage.B) {
+                statusText = '已用-2';
+            } else {
+                statusText = '空闲';
             }
 
             const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
-            message += `${statusEmoji} ${card.name}: A:${card.coupons.A} B:${totalB} ${usageEmoji} - ${statusText}\n`;
+            message += `${statusEmoji} ${card.name}: 五折:${card.coupons.A} -2:${totalB} ${usageEmoji} - ${statusText}\n`;
         });
-        message += '\n点击卡片按钮来进站/出站：';
+        message += '\n';
     }
 
     const keyboard = createCardButtons(cards);
@@ -149,27 +148,22 @@ bot.help((ctx) => {
 这个 Bot 可以帮助您管理信用卡的地铁优惠券。
 
 优惠规则：
-1. 每张卡初始有 10 张优惠券 A
-2. 每月自动增加 5 张优惠券 B（有效期2个月）
+1. 每张卡初始有 10 张 五折 优惠券
+2. 每月自动增加 5 张 -2 优惠券（有效期2个月）
+3. 每张卡每天可以分别使用一次 五折 和 -2
 
 功能：
 • /start - 显示主菜单
 • /cards - 查看所有卡片
 • 添加卡片 - 添加单张信用卡
-• 批量添加 - 一次添加多张卡片（用逗号分隔）
+• 批量添加 - 一次添加多张卡片
 • 点击卡片 - 进站操作
 • 再次点击 - 出站并选择优惠券
-• 删除卡片 - 移除不需要的卡片
 
 使用方法：
-1. 添加您的信用卡（支持批量添加）
-2. 进地铁时点击相应卡片（显示"进站中"状态）
-3. 出地铁时再次点击同一卡片
-4. 在弹出的菜单中选择使用的优惠券（A或B）
-5. 系统自动扣除优惠券并标记为今日已用
-
-批量添加示例：
-工商银行卡,招商银行卡,建设银行卡
+1. 进地铁时点击相应卡片
+2. 出地铁时再次点击同一卡片
+3. 选择使用的优惠券（五折 或 -2）
 `;
     ctx.reply(helpText);
 });
@@ -217,8 +211,8 @@ bot.action(/^card_(.+)$/, async (ctx) => {
         return;
     }
 
-    if (card.status === 'used_today') {
-        await ctx.answerCbQuery('今天已经使用过这张卡片了！');
+    if (card.dailyUsage && card.dailyUsage.A && card.dailyUsage.B && card.status === 'idle') {
+        await ctx.answerCbQuery('今天该卡所有优惠已用完！');
         return;
     }
 
@@ -230,11 +224,27 @@ bot.action(/^card_(.+)$/, async (ctx) => {
         await showMainMenu(ctx);
     } else if (card.status === 'in_station') {
         // 出站选择优惠券
-        await ctx.reply(`请选择 ${card.name} 使用的优惠券：`, Markup.inlineKeyboard([
-            [Markup.button.callback(`🎟️ 优惠券 A (剩余: ${card.coupons.A})`, `useA_${cardId}`)],
-            [Markup.button.callback(`🎫 优惠券 B (剩余: ${totalB})`, `useB_${cardId}`)],
-            [Markup.button.callback('❌ 取消', 'cancel_use')]
-        ]));
+        const buttons = [];
+        
+        let labelA = `🎟️ 使用五折 (剩余: ${card.coupons.A})`;
+        if (card.dailyUsage?.A) labelA += " [今日已用]";
+        
+        // 只有当有券且今日未用时才允许点击，或者显示不可用状态但允许取消
+        // 根据要求“一张卡可以用两个优惠各一次”，如果A用了，就不能再选A了
+        if (!card.dailyUsage?.A && card.coupons.A > 0) {
+            buttons.push([Markup.button.callback(labelA, `useA_${cardId}`)]);
+        }
+        
+        let labelB = `🎫 使用-2 (剩余: ${totalB})`;
+        if (card.dailyUsage?.B) labelB += " [今日已用]";
+
+        if (!card.dailyUsage?.B && totalB > 0) {
+            buttons.push([Markup.button.callback(labelB, `useB_${cardId}`)]);
+        }
+
+        buttons.push([Markup.button.callback('❌ 取消', 'cancel_use')]);
+
+        await ctx.reply(`请选择 ${card.name} 使用的优惠券：`, Markup.inlineKeyboard(buttons));
         await ctx.answerCbQuery();
     }
 });

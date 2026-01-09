@@ -3,6 +3,12 @@ export interface CouponBatch {
     count: number;
 }
 
+export interface DailyUsage {
+    A: boolean;
+    B: boolean;
+    date: string;
+}
+
 export interface Card {
     id: string;
     name: string;
@@ -10,6 +16,7 @@ export interface Card {
         A: number;
         B: CouponBatch[];
     };
+    dailyUsage: DailyUsage;
     status: 'idle' | 'in_station' | 'used_today';
     lastUsed: string | null;
     createdAt: string;
