@@ -122,10 +122,17 @@ async function showMainMenu(ctx: Context): Promise<void> {
 
     const keyboard = createCardButtons(cards);
 
-    if (ctx.callbackQuery) {
-        await ctx.editMessageText(message, keyboard);
-    } else {
-        await ctx.reply(message, keyboard);
+    try {
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(message, keyboard);
+        } else {
+            await ctx.reply(message, keyboard);
+        }
+    } catch (e) {
+        // 如果编辑消息失败（例如内容相同），则发送新消息
+        // 或者忽略 "message to edit not found" 错误
+        // console.error('Failed to update menu:', e);
+        await ctx.reply(message, keyboard); 
     }
 }
 
@@ -243,7 +250,12 @@ bot.action(/^use([AB])_(.+)$/, async (ctx) => {
     const result = dataManager.consumeCoupon(userId, cardId, type);
 
     if (result.success) {
-        await ctx.deleteMessage(); // 删除选择菜单
+        try {
+            await ctx.deleteMessage(); // 删除选择菜单
+        } catch (e) {
+            // Include a log statement for debugging purposes
+            console.error('Failed to delete message:', e);
+        }
         await ctx.reply(`✅ ${result.message}`);
         await showMainMenu(ctx);
     } else {
