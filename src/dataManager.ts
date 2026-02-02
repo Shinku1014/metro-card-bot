@@ -199,7 +199,6 @@ export class DataManager {
             if (card.coupons.B.length !== initialLen) {
                 modified = true;
             }
-            }
         });
 
         if (modified) {
