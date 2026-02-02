@@ -65,7 +65,7 @@ export class DataManager {
 
         const today = new Date();
         const monthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-        
+
         const newCard: Card = {
             id: Date.now().toString(),
             name: cardName,
@@ -130,7 +130,7 @@ export class DataManager {
                 card.dailyUsage = { A: false, B: false, date: today };
                 modified = true;
             }
-            
+
             // Clean up legacy status
             if (card.status === 'used_today') {
                 card.status = 'idle';
@@ -150,7 +150,7 @@ export class DataManager {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         const currentMonthKey = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}`;
-        
+
         // Calculate previous month key
         const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const prevMonthKey = `${prevDate.getFullYear()}-${(prevDate.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -167,9 +167,9 @@ export class DataManager {
         userData.cards.forEach(card => {
             // Ensure data structure integrity
             if (!card.coupons) {
-                 // Convert old card if exists?
-                 // Or just init
-                 card.coupons = { A: 10, B: [] };
+                // Convert old card if exists?
+                // Or just init
+                card.coupons = { A: 10, B: [] };
             }
             if (!card.coupons.B) card.coupons.B = [];
 
@@ -190,14 +190,15 @@ export class DataManager {
                 modified = true;
             }
 
-            // Remove expired coupons
+            // Remove expired coupons (Now B is only valid for the current month)
             const initialLen = card.coupons.B.length;
             card.coupons.B = card.coupons.B.filter(b => 
-                b.monthKey === currentMonthKey || b.monthKey === prevMonthKey
+                b.monthKey === currentMonthKey
             );
-            
+
             if (card.coupons.B.length !== initialLen) {
                 modified = true;
+            }
             }
         });
 
@@ -217,15 +218,15 @@ export class DataManager {
 
         if (!card.coupons) {
             // Should not happen with new logic, but reset if happens
-             this.checkAndRefillCoupons(userId, userData); // Try to Init
-             if (!card.coupons) return { success: false, message: '数据错误' };
+            this.checkAndRefillCoupons(userId, userData); // Try to Init
+            if (!card.coupons) return { success: false, message: '数据错误' };
         }
 
         // Check daily usage first
         if (!card.dailyUsage) {
-             card.dailyUsage = { A: false, B: false, date: new Date().toDateString() };
+            card.dailyUsage = { A: false, B: false, date: new Date().toDateString() };
         } else if (card.dailyUsage.date !== new Date().toDateString()) {
-             card.dailyUsage = { A: false, B: false, date: new Date().toDateString() };
+            card.dailyUsage = { A: false, B: false, date: new Date().toDateString() };
         }
 
         if (type === 'A') {
@@ -237,7 +238,7 @@ export class DataManager {
                 card.dailyUsage.A = true;
                 card.status = 'idle'; // Back to idle
                 card.lastUsed = new Date().toLocaleString();
-                
+
                 data[userId.toString()] = userData;
                 this.saveData(data);
                 return { success: true, message: `已使用五折优惠。剩余: ${card.coupons.A}` };
@@ -250,22 +251,22 @@ export class DataManager {
             }
             // Use oldest valid batch first
             card.coupons.B.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
-            
+
             const batch = card.coupons.B.find(b => b.count > 0);
-            
+
             if (batch) {
                 batch.count -= 1;
                 card.dailyUsage.B = true;
                 card.status = 'idle';
                 card.lastUsed = new Date().toLocaleString();
-                
+
                 const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
-                
+
                 data[userId.toString()] = userData;
                 this.saveData(data);
                 return { success: true, message: `已使用-2优惠(${batch.monthKey})。剩余: ${totalB}` };
             } else {
-                 return { success: false, message: '优惠-2已用完' };
+                return { success: false, message: '优惠-2已用完' };
             }
         }
         return { success: false, message: '无效的优惠券类型' };

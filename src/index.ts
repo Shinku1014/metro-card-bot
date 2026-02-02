@@ -131,7 +131,7 @@ async function showMainMenu(ctx: Context): Promise<void> {
         // 如果编辑消息失败（例如内容相同），则发送新消息
         // 或者忽略 "message to edit not found" 错误
         // console.error('Failed to update menu:', e);
-        await ctx.reply(message, keyboard); 
+        await ctx.reply(message, keyboard);
     }
 }
 
@@ -149,7 +149,7 @@ bot.help((ctx) => {
 
 优惠规则：
 1. 每张卡初始有 10 张 五折 优惠券
-2. 每月自动增加 5 张 -2 优惠券（有效期2个月）
+2. 每月自动增加 5 张 -2 优惠券（当月有效）
 3. 每张卡每天可以分别使用一次 五折 和 -2
 
 功能：
@@ -225,16 +225,16 @@ bot.action(/^card_(.+)$/, async (ctx) => {
     } else if (card.status === 'in_station') {
         // 出站选择优惠券
         const buttons = [];
-        
+
         let labelA = `🎟️ 使用五折 (剩余: ${card.coupons.A})`;
         if (card.dailyUsage?.A) labelA += " [今日已用]";
-        
+
         // 只有当有券且今日未用时才允许点击，或者显示不可用状态但允许取消
         // 根据要求“一张卡可以用两个优惠各一次”，如果A用了，就不能再选A了
         if (!card.dailyUsage?.A && card.coupons.A > 0) {
             buttons.push([Markup.button.callback(labelA, `useA_${cardId}`)]);
         }
-        
+
         let labelB = `🎫 使用-2 (剩余: ${totalB})`;
         if (card.dailyUsage?.B) labelB += " [今日已用]";
 
