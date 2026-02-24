@@ -192,7 +192,7 @@ export class DataManager {
 
             // Remove expired coupons (Now B is only valid for the current month)
             const initialLen = card.coupons.B.length;
-            card.coupons.B = card.coupons.B.filter(b => 
+            card.coupons.B = card.coupons.B.filter(b =>
                 b.monthKey === currentMonthKey
             );
 
