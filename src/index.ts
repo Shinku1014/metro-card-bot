@@ -155,6 +155,7 @@ bot.help((ctx) => {
 功能：
 • /start - 显示主菜单
 • /cards - 查看所有卡片
+• /reset - 取消当前所有卡的状态，全部设置为空闲
 • 添加卡片 - 添加单张信用卡
 • 批量添加 - 一次添加多张卡片
 • 点击卡片 - 进站操作
@@ -171,6 +172,15 @@ bot.help((ctx) => {
 // 查看卡片命令
 bot.command('cards', (ctx) => {
     showMainMenu(ctx);
+});
+
+// 重置所有卡片状态命令
+bot.command('reset', async (ctx) => {
+    if (!ctx.from) return;
+    const userId = ctx.from.id;
+    dataManager.resetAllCardsStatus(userId);
+    await ctx.reply('✅ 所有卡片状态已重置为「空闲」');
+    await showMainMenu(ctx);
 });
 
 // 处理添加卡片
@@ -267,8 +277,6 @@ bot.action(/^card_(.+)$/, async (ctx) => {
             buttons.push([Markup.button.callback(labelB, `useB_${cardId}`)]);
         }
 
-        buttons.push([Markup.button.callback('❌ 刷异进站（撤销）', `undo_checkin_${cardId}`)]);
-
         await ctx.reply(`请选择 ${card.name} 使用的优惠券：`, Markup.inlineKeyboard(buttons));
         await ctx.answerCbQuery();
     }
@@ -303,26 +311,6 @@ bot.action('cancel_use', async (ctx) => {
     if (!ctx.from) return;
     await ctx.deleteMessage();
     await ctx.answerCbQuery('已取消');
-});
-
-// 撤销进站
-bot.action(/^undo_checkin_(.+)$/, async (ctx) => {
-    if (!ctx.from || !ctx.match) return;
-
-    const cardId = ctx.match[1];
-    const userId = ctx.from.id;
-    const cards = dataManager.getCards(userId);
-    const card = cards.find(c => c.id === cardId);
-
-    if (!card) {
-        await ctx.answerCbQuery('卡片不存在！');
-        return;
-    }
-
-    dataManager.updateCardStatus(userId, cardId, 'idle');
-    try { await ctx.deleteMessage(); } catch (e) { /* 忽略删除失败 */ }
-    await ctx.answerCbQuery(`✅ ${card.name} 已撤销进站`);
-    await showMainMenu(ctx);
 });
 
 // 处理删除菜单
@@ -490,7 +478,6 @@ async function checkTimeoutReminders(): Promise<void> {
 
             if (elapsedMinutes >= CHECKOUT_TIMEOUT_MINUTES) {
                 const keyboard = Markup.inlineKeyboard([
-                    [Markup.button.callback('🔙 刚才点错了（撤销进站）', `undo_checkin_${card.id}`)],
                     [Markup.button.callback('✅ 已出站，选择优惠券', `reminder_checkout_${card.id}`)]
                 ]);
 
@@ -554,7 +541,6 @@ bot.action(/^reminder_checkout_(.+)$/, async (ctx) => {
     if (!card.dailyUsage?.B && totalB > 0) {
         buttons.push([Markup.button.callback(`🎫 使用减二 (剩余: ${totalB})`, `useB_${cardId}`)]);
     }
-    buttons.push([Markup.button.callback('❌ 刷异进站（撤销）', `undo_checkin_${cardId}`)]);
 
     try { await ctx.deleteMessage(); } catch (e) { /* 忽略 */ }
     await ctx.reply(`请选择 ${card.name} 使用的优惠券：`, Markup.inlineKeyboard(buttons));
@@ -563,6 +549,14 @@ bot.action(/^reminder_checkout_(.+)$/, async (ctx) => {
 
 // 启动 Bot
 console.log('Starting Metro Card Bot...');
+
+bot.telegram.setMyCommands([
+    { command: 'start', description: '显示主菜单' },
+    { command: 'cards', description: '查看所有卡片' },
+    { command: 'reset', description: '重置所有卡片状态为「空闲」' },
+    { command: 'help', description: '显示帮助信息' }
+]);
+
 bot.launch().then(() => {
     console.log('Metro Card Bot is running!');
     // 启动超时提醒定时器（每分钟扫描一次）

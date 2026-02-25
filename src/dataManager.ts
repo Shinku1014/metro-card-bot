@@ -122,6 +122,21 @@ export class DataManager {
         return true;
     }
 
+    public resetAllCardsStatus(userId: number): boolean {
+        const data = this.loadData();
+        const userData = this.getUserData(userId);
+
+        userData.cards.forEach(card => {
+            card.status = 'idle';
+            card.checkInTime = undefined;
+            card.reminderSent = false;
+        });
+
+        data[userId.toString()] = userData;
+        this.saveData(data);
+        return true;
+    }
+
     private resetDailyStatusIfNeeded(userId: number, userData: UserData): void {
         const today = new Date().toDateString();
         let modified = false;
