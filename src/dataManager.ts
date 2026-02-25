@@ -107,10 +107,14 @@ export class DataManager {
         card.status = newStatus;
         card.lastUsed = new Date().toLocaleString();
 
-        if (oldStatus === 'in_station' && newStatus === 'idle') {
-            card.status = 'idle'; // Reset to idle, usage tracked in dailyUsage
-        } else {
-            card.status = newStatus;
+        if (newStatus === 'in_station') {
+            // 记录进站时间（ISO 格式，便于超时计算）
+            card.checkInTime = new Date().toISOString();
+            card.reminderSent = false;
+        } else if (oldStatus === 'in_station' && newStatus === 'idle') {
+            // 出站或撤销时清除进站记录
+            card.checkInTime = undefined;
+            card.reminderSent = false;
         }
 
         data[userId.toString()] = userData;
@@ -246,7 +250,7 @@ export class DataManager {
             }
         } else if (type === 'B') {
             if (card.dailyUsage.B) {
-                return { success: false, message: '今日已使用过-2优惠' };
+                return { success: false, message: '今日已使用过减二优惠' };
             }
             // Use oldest valid batch first
             card.coupons.B.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
@@ -263,12 +267,37 @@ export class DataManager {
 
                 data[userId.toString()] = userData;
                 this.saveData(data);
-                return { success: true, message: `已使用-2优惠(${batch.monthKey})。剩余: ${totalB}` };
+                return { success: true, message: `已使用减二优惠(${batch.monthKey})。剩余: ${totalB}` };
             } else {
-                return { success: false, message: '优惠-2已用完' };
+                return { success: false, message: '减二优惠已用完' };
             }
         }
         return { success: false, message: '无效的优惠券类型' };
+    }
+
+    /**
+     * 返回所有用户的 userId 和其卡片数组，用于后台超时扫描。
+     */
+    public getAllUsersCards(): Array<{ userId: string; cards: Card[] }> {
+        const data = this.loadData();
+        return Object.entries(data)
+            .filter(([, userData]) => userData && Array.isArray(userData.cards))
+            .map(([userId, userData]) => ({ userId, cards: userData.cards }));
+    }
+
+    /**
+     * 持久化某张卡片的 reminderSent 标志位。
+     */
+    public setReminderSent(userId: number, cardId: string, value: boolean): boolean {
+        const data = this.loadData();
+        const userData = this.getUserData(userId);
+        const card = userData.cards.find(c => c.id === cardId);
+        if (!card) return false;
+
+        card.reminderSent = value;
+        data[userId.toString()] = userData;
+        this.saveData(data);
+        return true;
     }
 
     public deleteCard(userId: number, cardId: string): boolean {

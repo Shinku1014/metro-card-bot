@@ -45,13 +45,13 @@ function createCardButtons(cards: Card[]) {
         } else if (card.dailyUsage && card.dailyUsage.A) {
             statusText = '已用五折';
         } else if (card.dailyUsage && card.dailyUsage.B) {
-            statusText = '已用-2';
+            statusText = '已用减二';
         } else {
             statusText = '空闲';
         }
 
         const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
-        const buttonText = `${statusEmoji} ${card.name} (五折:${card.coupons.A} -2:${totalB}) ${usageEmoji} - ${statusText}`;
+        const buttonText = `${statusEmoji} ${card.name} (五折: ${card.coupons.A} 减二: ${totalB}) ${usageEmoji} - ${statusText}`;
 
         return [Markup.button.callback(buttonText, `card_${card.id}`)];
     });
@@ -108,13 +108,13 @@ async function showMainMenu(ctx: Context): Promise<void> {
             } else if (card.dailyUsage && card.dailyUsage.A) {
                 statusText = '已用五折';
             } else if (card.dailyUsage && card.dailyUsage.B) {
-                statusText = '已用-2';
+                statusText = '已用减二';
             } else {
                 statusText = '空闲';
             }
 
             const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
-            message += `${statusEmoji} ${card.name}: 五折:${card.coupons.A} -2:${totalB} ${usageEmoji} - ${statusText}\n`;
+            message += `${statusEmoji} ${card.name}: 五折: ${card.coupons.A} 减二: ${totalB} ${usageEmoji} - ${statusText}\n`;
         });
         message += '\n';
     }
@@ -149,8 +149,8 @@ bot.help((ctx) => {
 
 优惠规则：
 1. 每张卡初始有 10 张 五折 优惠券
-2. 每月自动增加 5 张 -2 优惠券（当月有效）
-3. 每张卡每天可以分别使用一次 五折 和 -2
+2. 每月自动增加 5 张 减二 优惠券（当月有效）
+3. 每张卡每天可以分别使用一次 五折 和 减二
 
 功能：
 • /start - 显示主菜单
@@ -163,7 +163,7 @@ bot.help((ctx) => {
 使用方法：
 1. 进地铁时点击相应卡片
 2. 出地铁时再次点击同一卡片
-3. 选择使用的优惠券（五折 或 -2）
+3. 选择使用的优惠券（五折 或 减二）
 `;
     ctx.reply(helpText);
 });
@@ -224,25 +224,50 @@ bot.action(/^card_(.+)$/, async (ctx) => {
         await showMainMenu(ctx);
     } else if (card.status === 'in_station') {
         // 出站选择优惠券
+        const canUseA = !card.dailyUsage?.A && card.coupons.A > 0;
+        const canUseB = !card.dailyUsage?.B && totalB > 0;
+
+        // 若只有一种可用，则自动消耗
+        if (canUseA && !canUseB) {
+            const result = dataManager.consumeCoupon(userId, cardId, 'A');
+            if (result.success) {
+                await ctx.answerCbQuery(`✅ 自动使用五折 | ${result.message}`);
+                await showMainMenu(ctx);
+            } else {
+                await ctx.answerCbQuery(result.message);
+            }
+            return;
+        }
+
+        if (canUseB && !canUseA) {
+            const result = dataManager.consumeCoupon(userId, cardId, 'B');
+            if (result.success) {
+                await ctx.answerCbQuery(`✅ 自动使用减二 | ${result.message}`);
+                await showMainMenu(ctx);
+            } else {
+                await ctx.answerCbQuery(result.message);
+            }
+            return;
+        }
+
+        // 两种均可用或均不可用时，展示手动选择菜单
         const buttons = [];
 
         let labelA = `🎟️ 使用五折 (剩余: ${card.coupons.A})`;
-        if (card.dailyUsage?.A) labelA += " [今日已用]";
+        if (card.dailyUsage?.A) labelA += ' [今日已用]';
 
-        // 只有当有券且今日未用时才允许点击，或者显示不可用状态但允许取消
-        // 根据要求“一张卡可以用两个优惠各一次”，如果A用了，就不能再选A了
         if (!card.dailyUsage?.A && card.coupons.A > 0) {
             buttons.push([Markup.button.callback(labelA, `useA_${cardId}`)]);
         }
 
-        let labelB = `🎫 使用-2 (剩余: ${totalB})`;
-        if (card.dailyUsage?.B) labelB += " [今日已用]";
+        let labelB = `🎫 使用减二 (剩余: ${totalB})`;
+        if (card.dailyUsage?.B) labelB += ' [今日已用]';
 
         if (!card.dailyUsage?.B && totalB > 0) {
             buttons.push([Markup.button.callback(labelB, `useB_${cardId}`)]);
         }
 
-        buttons.push([Markup.button.callback('❌ 取消', 'cancel_use')]);
+        buttons.push([Markup.button.callback('❌ 刷异进站（撤销）', `undo_checkin_${cardId}`)]);
 
         await ctx.reply(`请选择 ${card.name} 使用的优惠券：`, Markup.inlineKeyboard(buttons));
         await ctx.answerCbQuery();
@@ -278,6 +303,26 @@ bot.action('cancel_use', async (ctx) => {
     if (!ctx.from) return;
     await ctx.deleteMessage();
     await ctx.answerCbQuery('已取消');
+});
+
+// 撤销进站
+bot.action(/^undo_checkin_(.+)$/, async (ctx) => {
+    if (!ctx.from || !ctx.match) return;
+
+    const cardId = ctx.match[1];
+    const userId = ctx.from.id;
+    const cards = dataManager.getCards(userId);
+    const card = cards.find(c => c.id === cardId);
+
+    if (!card) {
+        await ctx.answerCbQuery('卡片不存在！');
+        return;
+    }
+
+    dataManager.updateCardStatus(userId, cardId, 'idle');
+    try { await ctx.deleteMessage(); } catch (e) { /* 忽略删除失败 */ }
+    await ctx.answerCbQuery(`✅ ${card.name} 已撤销进站`);
+    await showMainMenu(ctx);
 });
 
 // 处理删除菜单
@@ -424,10 +469,105 @@ bot.catch((err, ctx) => {
     ctx.reply('发生错误，请稍后重试。');
 });
 
+// ---- 超时出站提醒 ----
+const CHECKOUT_TIMEOUT_MINUTES = 210; // 可调整的超时阈值（分钟）
+
+async function checkTimeoutReminders(): Promise<void> {
+    const allUsers = dataManager.getAllUsersCards();
+    const now = Date.now();
+
+    for (const { userId, cards } of allUsers) {
+        const numericUserId = parseInt(userId, 10);
+        if (isNaN(numericUserId)) continue;
+
+        for (const card of cards) {
+            if (card.status !== 'in_station') continue;
+            if (card.reminderSent) continue;
+            if (!card.checkInTime) continue;
+
+            const checkInMs = new Date(card.checkInTime).getTime();
+            const elapsedMinutes = (now - checkInMs) / 60000;
+
+            if (elapsedMinutes >= CHECKOUT_TIMEOUT_MINUTES) {
+                const keyboard = Markup.inlineKeyboard([
+                    [Markup.button.callback('🔙 刚才点错了（撤销进站）', `undo_checkin_${card.id}`)],
+                    [Markup.button.callback('✅ 已出站，选择优惠券', `reminder_checkout_${card.id}`)]
+                ]);
+
+                try {
+                    await bot.telegram.sendMessage(
+                        numericUserId,
+                        `⏰ 提醒：您的卡片「${card.name}」已进站 ${Math.floor(elapsedMinutes)} 分钟，请确认是否已出站。`,
+                        keyboard
+                    );
+                    dataManager.setReminderSent(numericUserId, card.id, true);
+                    console.log(`Timeout reminder sent for user ${userId}, card ${card.name}`);
+                } catch (e) {
+                    console.error(`Failed to send timeout reminder to user ${userId}:`, e);
+                }
+            }
+        }
+    }
+}
+
+// 处理提醒消息中的"已出站"按钮
+bot.action(/^reminder_checkout_(.+)$/, async (ctx) => {
+    if (!ctx.from || !ctx.match) return;
+
+    const cardId = ctx.match[1];
+    const userId = ctx.from.id;
+    const cards = dataManager.getCards(userId);
+    const card = cards.find(c => c.id === cardId);
+
+    if (!card || card.status !== 'in_station') {
+        await ctx.answerCbQuery('该卡片当前不在进站状态');
+        try { await ctx.deleteMessage(); } catch (e) { /* 忽略 */ }
+        return;
+    }
+
+    const totalB = card.coupons.B.reduce((sum, b) => sum + b.count, 0);
+    const canUseA = !card.dailyUsage?.A && card.coupons.A > 0;
+    const canUseB = !card.dailyUsage?.B && totalB > 0;
+
+    // 若只有一种可用，自动消耗
+    if (canUseA && !canUseB) {
+        const result = dataManager.consumeCoupon(userId, cardId, 'A');
+        try { await ctx.deleteMessage(); } catch (e) { /* 忽略 */ }
+        await ctx.answerCbQuery(`✅ 自动使用五折 | ${result.message}`);
+        await showMainMenu(ctx);
+        return;
+    }
+
+    if (canUseB && !canUseA) {
+        const result = dataManager.consumeCoupon(userId, cardId, 'B');
+        try { await ctx.deleteMessage(); } catch (e) { /* 忽略 */ }
+        await ctx.answerCbQuery(`✅ 自动使用减二 | ${result.message}`);
+        await showMainMenu(ctx);
+        return;
+    }
+
+    // 展示选择菜单
+    const buttons = [];
+    if (!card.dailyUsage?.A && card.coupons.A > 0) {
+        buttons.push([Markup.button.callback(`🎟️ 使用五折 (剩余: ${card.coupons.A})`, `useA_${cardId}`)]);
+    }
+    if (!card.dailyUsage?.B && totalB > 0) {
+        buttons.push([Markup.button.callback(`🎫 使用减二 (剩余: ${totalB})`, `useB_${cardId}`)]);
+    }
+    buttons.push([Markup.button.callback('❌ 刷异进站（撤销）', `undo_checkin_${cardId}`)]);
+
+    try { await ctx.deleteMessage(); } catch (e) { /* 忽略 */ }
+    await ctx.reply(`请选择 ${card.name} 使用的优惠券：`, Markup.inlineKeyboard(buttons));
+    await ctx.answerCbQuery();
+});
+
 // 启动 Bot
 console.log('Starting Metro Card Bot...');
 bot.launch().then(() => {
     console.log('Metro Card Bot is running!');
+    // 启动超时提醒定时器（每分钟扫描一次）
+    setInterval(checkTimeoutReminders, 60 * 1000);
+    console.log(`Timeout reminder checker started (threshold: ${CHECKOUT_TIMEOUT_MINUTES} min)`);
 });
 
 // 优雅关闭

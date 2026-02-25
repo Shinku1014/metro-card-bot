@@ -20,6 +20,8 @@ export interface Card {
     status: 'idle' | 'in_station' | 'used_today';
     lastUsed: string | null;
     createdAt: string;
+    checkInTime?: string;    // ISO timestamp，记录进站时间，用于超时检测
+    reminderSent?: boolean;  // 是否已发送超时提醒，防止重复推送
 }
 
 export interface UserData {
